@@ -134,7 +134,7 @@ export default async function PdfPage({ params }: PageProps) {
             </span>
 
             <a
-              href={viewerUrl}
+              href={proxiedUrl!}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1 text-xs font-bold hover:text-[#6D28D9] transition-colors font-['Tajawal']"
@@ -169,9 +169,9 @@ export default async function PdfPage({ params }: PageProps) {
                 <p className="text-sm font-['Tajawal']" style={{ color: "#999" }}>
                   جرب فتحه في تبويب جديد
                 </p>
-                {viewerUrl && (
+                {proxiedUrl && (
                   <a
-                    href={viewerUrl}
+                    href={proxiedUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white font-['Tajawal']"
@@ -201,9 +201,9 @@ export default async function PdfPage({ params }: PageProps) {
           </div>
 
           <div className="flex items-center gap-3">
-            {viewerUrl && (
+            {proxiedUrl && (
               <a
-                href={viewerUrl}
+                href={proxiedUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border-2 text-sm font-bold font-['Tajawal'] transition-colors hover:border-[#7C3AED] hover:text-[#7C3AED]"
@@ -318,7 +318,7 @@ export default async function PdfPage({ params }: PageProps) {
         <p className="text-center text-[11px] font-['Tajawal'] mt-4" style={{ color: "#CCC" }}>
           مشكلة في العرض؟{" "}
           <a
-            href={viewerUrl}
+            href={proxiedUrl!}
             target="_blank"
             rel="noopener noreferrer"
             className="font-bold hover:underline"

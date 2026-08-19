@@ -1,3 +1,4 @@
+// src/app/pdf/[pdfurl]/page.tsx
 import type { Metadata } from "next";
 import { pdfIfarem } from "@/scraper";
 import Link from "next/link";
@@ -11,24 +12,14 @@ import {
   Eye,
   ChevronLeft,
   Home,
-  Download,
 } from "lucide-react";
-
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 type PageProps = {
   params: Promise<{ pdfurl: string }>;
 };
 
-// ─── Caching ──────────────────────────────────────────────────────────────────
-
 export const dynamic = "force-static";
-export const revalidate = 259200; // 3 days
-
-// ─── SEO: dynamic metadata per PDF ───────────────────────────────────────────
-// This is the most important SEO addition — each PDF now gets its own
-// unique title and description in Google search results.
+export const revalidate = 259200;
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { pdfurl } = await params;
@@ -45,24 +36,36 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       description: seoDescription,
       type: "article",
     },
-    robots: {
-      index: true,
-      follow: true,
-    },
-    alternates: {
-      canonical: `/pdf/${pdfurl}`,
-    },
+    robots: { index: true, follow: true },
+    alternates: { canonical: `/pdf/${pdfurl}` },
   };
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+/* Base64URL encode (browser-safe) */
+function toBase64Url(str: string): string {
+  return Buffer.from(str, "utf-8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
 
 export default async function PdfPage({ params }: PageProps) {
   const { pdfurl } = await params;
-  const { iframeUrl, description, urlDownload, realtedItems, examsList } =
-    await pdfIfarem(pdfurl);
+  const {
+    viewerUrl,
+    pdfFileUrl,
+    description,
+    urlDownload,
+    realtedItems,
+    examsList,
+  } = await pdfIfarem(pdfurl);
 
-  // JSON-LD for this specific document — helps Google index it as a real resource
+  // ── Brave-safe proxy URL (no ?url=https://… pattern) ──
+  const proxiedUrl = pdfFileUrl
+    ? `/api/pdf-proxy?r=${toBase64Url(pdfFileUrl)}`
+    : null;
+
   const documentSchema = {
     "@context": "https://schema.org",
     "@type": "DigitalDocument",
@@ -71,21 +74,11 @@ export default async function PdfPage({ params }: PageProps) {
     inLanguage: "ar",
     encodingFormat: "application/pdf",
     isAccessibleForFree: true,
-    publisher: {
-      "@type": "EducationalOrganization",
-      name: "توفيق",
-    },
+    publisher: { "@type": "EducationalOrganization", name: "توفيق" },
   };
-const encodedUrl = encodeURIComponent(iframeUrl);
-const viewerUrl = `https://docs.google.com/gview?url=${encodedUrl}&embedded=true`;
-
 
   return (
-    <main
-      className="min-h-screen font-['Tajawal']"
-      style={{ background: "#F7F3EC" }}
-    >
-      {/* JSON-LD */}
+    <main className="min-h-screen font-['Tajawal']" style={{ background: "#F7F3EC" }}>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(documentSchema) }}
@@ -94,8 +87,7 @@ const viewerUrl = `https://docs.google.com/gview?url=${encodedUrl}&embedded=true
       <SecondaryHeader />
 
       <div className="max-w-6xl mx-auto px-6 lg:px-8 py-10">
-
-        {/* ─── Breadcrumb ────────────────────────────────────────────────── */}
+        {/* Breadcrumb */}
         <nav className="flex items-center gap-2 text-sm mb-8" style={{ color: "#AAA" }}>
           <Link
             href="/"
@@ -110,12 +102,9 @@ const viewerUrl = `https://docs.google.com/gview?url=${encodedUrl}&embedded=true
           </span>
         </nav>
 
-        {/* ─── Page header ──────────────────────────────────────────────── */}
+        {/* Header */}
         <div className="mb-6">
-          <p
-            className="text-xs font-bold tracking-widest uppercase mb-2"
-            style={{ color: "#7C3AED" }}
-          >
+          <p className="text-xs font-bold tracking-widest uppercase mb-2" style={{ color: "#7C3AED" }}>
             عرض الملف
           </p>
           <h1
@@ -126,7 +115,7 @@ const viewerUrl = `https://docs.google.com/gview?url=${encodedUrl}&embedded=true
           </h1>
         </div>
 
-        {/* ─── PDF Viewer ───────────────────────────────────────────────── */}
+        {/* PDF Viewer */}
         <div
           className="rounded-3xl overflow-hidden mb-4"
           style={{ background: "#fff", border: "1.5px solid #E8E2D8" }}
@@ -145,7 +134,7 @@ const viewerUrl = `https://docs.google.com/gview?url=${encodedUrl}&embedded=true
             </span>
 
             <a
-              href={iframeUrl}
+              href={viewerUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1 text-xs font-bold hover:text-[#6D28D9] transition-colors font-['Tajawal']"
@@ -158,16 +147,14 @@ const viewerUrl = `https://docs.google.com/gview?url=${encodedUrl}&embedded=true
 
           {/* iframe */}
           <div className="relative w-full" style={{ height: "75vh" }}>
-            {iframeUrl ? (
-              
-              <iframe
-                src={iframeUrl}
-                className="w-full h-full border-0"
-                title={description || "PDF Viewer"}
-                allow="fullscreen"
-              />
-              // https://eddirasa.com/wp-content/plugins/viewer-2/web/viewer.html?file=https%3A%2F%2Feddirasa.com%2Fwp-content%2Fuploads%2F2022%2F10%2Feddirasa.com-%D8%A7%D9%84%D9%85%D9%88%D8%B6%D9%88%D8%B9-%D8%B1%D9%82%D9%85-47-%D9%81%D8%B1%D8%B6-%D8%A7%D9%84%D9%81%D8%B5%D9%84-%D8%A7%D9%84%D8%AB%D8%A7%D9%86%D9%8A-%D8%B1%D9%8A%D8%A7%D8%B6%D9%8A%D8%A7%D8%AA-%D8%B1%D8%A7%D8%A8%D8%B9%D8%A9-%D9%85%D8%AA%D9%88%D8%B3%D8%B7.pdf#zoom=page-width&pagemode=none
-
+            {proxiedUrl ? (
+            <iframe
+    src={proxiedUrl}
+    className="w-full h-full border-0"
+    title={description || "PDF Viewer"}
+    allow="fullscreen"
+    // sandbox removed — proxy CSP already handles security
+  />
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-3">
                 <div
@@ -182,9 +169,9 @@ const viewerUrl = `https://docs.google.com/gview?url=${encodedUrl}&embedded=true
                 <p className="text-sm font-['Tajawal']" style={{ color: "#999" }}>
                   جرب فتحه في تبويب جديد
                 </p>
-                {iframeUrl && (
+                {viewerUrl && (
                   <a
-                    href={iframeUrl}
+                    href={viewerUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white font-['Tajawal']"
@@ -199,7 +186,7 @@ const viewerUrl = `https://docs.google.com/gview?url=${encodedUrl}&embedded=true
           </div>
         </div>
 
-        {/* ─── Action bar ───────────────────────────────────────────────── */}
+        {/* Action bar */}
         <div
           className="flex items-center justify-between gap-4 p-4 rounded-2xl mb-8 flex-wrap"
           style={{ background: "#fff", border: "1.5px solid #E8E2D8" }}
@@ -214,9 +201,9 @@ const viewerUrl = `https://docs.google.com/gview?url=${encodedUrl}&embedded=true
           </div>
 
           <div className="flex items-center gap-3">
-            {iframeUrl && (
+            {viewerUrl && (
               <a
-                href={iframeUrl}
+                href={viewerUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border-2 text-sm font-bold font-['Tajawal'] transition-colors hover:border-[#7C3AED] hover:text-[#7C3AED]"
@@ -235,16 +222,12 @@ const viewerUrl = `https://docs.google.com/gview?url=${encodedUrl}&embedded=true
           </div>
         </div>
 
-        {/* ─── Related Exams ───────────────────────────────────────────── */}
+        {/* Related Exams */}
         {examsList.length > 0 && (
           <div className="mb-8">
-            <p
-              className="text-xs font-bold tracking-widest uppercase mb-3"
-              style={{ color: "#7C3AED" }}
-            >
+            <p className="text-xs font-bold tracking-widest uppercase mb-3" style={{ color: "#7C3AED" }}>
               اختبارات ومواضيع ذات صلة
             </p>
-
             <div className="space-y-2">
               {examsList.map((exam, i) => (
                 <div
@@ -258,38 +241,27 @@ const viewerUrl = `https://docs.google.com/gview?url=${encodedUrl}&embedded=true
                   >
                     <FileText className="w-4 h-4" style={{ color: "#92400E" }} />
                   </div>
-
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-[#1A1A1A] font-['Tajawal'] leading-relaxed">
                       {exam.text}
                     </p>
                     <div className="flex items-center gap-3 mt-0.5">
-                      <span
-                        className="text-[10px] font-['Tajawal']"
-                        style={{ color: "#999" }}
-                      >
+                      <span className="text-[10px] font-['Tajawal']" style={{ color: "#999" }}>
                         {exam.year}
                       </span>
                       {exam.hasSolution ? (
-                        <span
-                          className="text-[10px] font-bold font-['Tajawal'] flex items-center gap-0.5"
-                          style={{ color: "#065F46" }}
-                        >
+                        <span className="text-[10px] font-bold font-['Tajawal'] flex items-center gap-0.5" style={{ color: "#065F46" }}>
                           <CheckCircle2 className="w-2.5 h-2.5" />
                           مع الحل
                         </span>
                       ) : (
-                        <span
-                          className="text-[10px] font-bold font-['Tajawal'] flex items-center gap-0.5"
-                          style={{ color: "#9D174D" }}
-                        >
+                        <span className="text-[10px] font-bold font-['Tajawal'] flex items-center gap-0.5" style={{ color: "#9D174D" }}>
                           <XCircle className="w-2.5 h-2.5" />
                           بدون حل
                         </span>
                       )}
                     </div>
                   </div>
-
                   <Link
                     href={`/pdf/${exam.pathOfPdf}`}
                     className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold text-white transition-all hover:bg-[#6D28D9] shrink-0 font-['Tajawal']"
@@ -304,16 +276,12 @@ const viewerUrl = `https://docs.google.com/gview?url=${encodedUrl}&embedded=true
           </div>
         )}
 
-        {/* ─── Related Items ───────────────────────────────────────────── */}
+        {/* Related Items */}
         {realtedItems.length > 0 && (
           <div className="mb-8">
-            <p
-              className="text-xs font-bold tracking-widest uppercase mb-3"
-              style={{ color: "#7C3AED" }}
-            >
+            <p className="text-xs font-bold tracking-widest uppercase mb-3" style={{ color: "#7C3AED" }}>
               مواد ذات صلة
             </p>
-
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {realtedItems.map((item, i) => (
                 <Link
@@ -346,14 +314,11 @@ const viewerUrl = `https://docs.google.com/gview?url=${encodedUrl}&embedded=true
           </div>
         )}
 
-        {/* ─── Footer note ──────────────────────────────────────────────── */}
-        <p
-          className="text-center text-[11px] font-['Tajawal'] mt-4"
-          style={{ color: "#CCC" }}
-        >
+        {/* Footer note */}
+        <p className="text-center text-[11px] font-['Tajawal'] mt-4" style={{ color: "#CCC" }}>
           مشكلة في العرض؟{" "}
           <a
-            href={iframeUrl}
+            href={viewerUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="font-bold hover:underline"
@@ -362,7 +327,6 @@ const viewerUrl = `https://docs.google.com/gview?url=${encodedUrl}&embedded=true
             افتح الملف في تبويب جديد
           </a>
         </p>
-
       </div>
     </main>
   );

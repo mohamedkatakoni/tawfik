@@ -282,79 +282,228 @@ export async function specificMaterialPdfs(
 
     return list;
 }
-export async function pdfIfarem(pdfurl: string) {
-    const selector = "#articleFileFrame";
-    // #the-post > div > div.entry > div:nth-child(6) > iframe
-    const url = `https://eddirasa.com/${pdfurl}`;
+// src/lib/scraper.ts  (or wherever pdfIfarem lives)
 
-    const $ = await cheerio.fromURL(url);
-    const iframeUrl = $(selector).attr("src")!;
-    const description = $(
-        "#sitePage > main > div > nav > ol > li.breadcrumb-item.active > h1",
-    )
-        .text()
-        .trim();
-    const urlDownload = $(
-        "#the-post > div > div.entry > div.btn-group > a.btn.btn-danger",
-    ).attr("href");
-    const examsList: {
-        text: string;
-        year: string;
-        hasSolution: boolean;
-        pathOfPdf: string;
-    }[] = [];
-    const realtedItems: { img: string; text: string; pathOfPdf: string }[] = [];
 
-    if (
-        $("#related_posts > div.post-listing > div.item-list-exams").length !==
-        0
-    ) {
-        $("#related_posts > div.post-listing > div.item-list-exams").each(
-            (_, ele) => {
-                const href = $(ele)
-                    .find("div.btn-group > a.btn.btn-outline-secondary")
-                    .attr("href")!;
-                const path = href.split("/").filter(Boolean).pop();
-                const item = {
-                    text: $(ele)
-                        .find("div.btn-group > a.btn.btn-outline-secondary")
-                        .text()
-                        .trim()!,
-                    pathOfPdf: path || "",
-                    year: $(ele)
-                        .find("div.btn-group > a.btn.btn-secondary")
-                        .text()
-                        .trim()!,
-                    hasSolution:
-                        $(ele).find(
-                            "div.btn-group > a.btn.btn-secondary span.fa.fa-times",
-                        ).length === 0,
-                };
-                examsList.push(item);
-            },
-        );
-    } else {
-        $("#related_posts > div.post-listing > div.related-item").each(
-            (_, el) => {
-                const href = $(el).find("h3 > a").attr("href")!;
-                const path = href.split("/").filter(Boolean).pop() || "";
-                const item = {
-                    text: $(el).find("h3 a").text().trim(),
-                    pathOfPdf: path,
-                    img: $(el).find("img").attr("src")!,
-                };
-                realtedItems.push(item);
-            },
-        );
-    }
-    return {
-        iframeUrl: getGoogleDocsIframeUrl(iframeUrl),
-        description,
-        urlDownload,
-        realtedItems,
-        examsList,
-    };
+/* ─── helpers ─── */
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
 }
+
+async function fetchWithRetry(
+  url: string,
+  opts?: RequestInit,
+  retries = 3
+): Promise<Response> {
+  const headers: Record<string, string> = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+    Accept:
+      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Cache-Control": "max-age=0",
+    "Sec-Ch-Ua":
+      '"Not)A;Brand";v="99", "Google Chrome";v="127", "Chromium";v="127"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+    ...(opts?.headers as Record<string, string>),
+  };
+
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url, { ...opts, headers, redirect: "follow" });
+      if (res.ok) return res;
+
+      // honour eddirasa's Retry-After header
+      if (res.status === 503 && i < retries - 1) {
+        const retryAfter =
+          Number(res.headers.get("retry-after")) || Math.pow(2, i);
+        await sleep(retryAfter * 1000);
+        continue;
+      }
+      throw new Error(`Upstream HTTP ${res.status}`);
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      await sleep(1000 * (i + 1));
+    }
+  }
+  throw new Error("Max retries exceeded");
+}
+
+/* ─── main scraper ─── */
+export async function pdfIfarem(pdfurl: string) {
+  const selector = "#articleFileFrame";
+  const url = `https://eddirasa.com/${pdfurl}`;
+
+  const res = await fetchWithRetry(url);
+  const html = await res.text();
+  const $ = cheerio.load(html);
+
+  const iframeUrl = $(selector).attr("src") ?? "";
+  const description = $(
+    "#sitePage > main > div > nav > ol > li.breadcrumb-item.active > h1"
+  )
+    .text()
+    .trim();
+
+  const urlDownload = $(
+    "#the-post > div > div.entry > div.btn-group > a.btn.btn-danger"
+  ).attr("href");
+
+  const examsList: {
+    text: string;
+    year: string;
+    hasSolution: boolean;
+    pathOfPdf: string;
+  }[] = [];
+
+  const realtedItems: { img: string; text: string; pathOfPdf: string }[] = [];
+
+  if ($("#related_posts > div.post-listing > div.item-list-exams").length !== 0) {
+    $("#related_posts > div.post-listing > div.item-list-exams").each(
+      (_, ele) => {
+        const href = $(ele)
+          .find("div.btn-group > a.btn.btn-outline-secondary")
+          .attr("href")!;
+        const path = href.split("/").filter(Boolean).pop();
+        const item = {
+          text: $(ele)
+            .find("div.btn-group > a.btn.btn-outline-secondary")
+            .text()
+            .trim(),
+          pathOfPdf: path || "",
+          year: $(ele)
+            .find("div.btn-group > a.btn.btn-secondary")
+            .text()
+            .trim(),
+          hasSolution:
+            $(ele).find(
+              "div.btn-group > a.btn.btn-secondary span.fa.fa-times"
+            ).length === 0,
+        };
+        examsList.push(item);
+      }
+    );
+  } else {
+    $("#related_posts > div.post-listing > div.related-item").each((_, el) => {
+      const href = $(el).find("h3 > a").attr("href")!;
+      const path = href.split("/").filter(Boolean).pop() || "";
+      const item = {
+        text: $(el).find("h3 a").text().trim(),
+        pathOfPdf: path,
+        img: $(el).find("img").attr("src")!,
+      };
+      realtedItems.push(item);
+    });
+  }
+
+  return {
+    viewerUrl: iframeUrl,
+    pdfFileUrl: (() => {
+      try {
+        return new URL(iframeUrl).searchParams.get("file");
+      } catch {
+        return null;
+      }
+    })(),
+    description,
+    urlDownload,
+    realtedItems,
+    examsList,
+  };
+}
+function extractPdfFileUrl(viewerUrl: string): string | null {
+  try {
+    return new URL(viewerUrl).searchParams.get("file");
+  } catch {
+    return null;
+  }
+}
+// export async function pdfIfarem(pdfurl: string) {
+//     const selector = "#articleFileFrame";
+//     // #the-post > div > div.entry > div:nth-child(6) > iframe
+//     const url = `https://eddirasa.com/${pdfurl}`;
+
+//     const $ = await cheerio.fromURL(url);
+//     const iframeUrl = $(selector).attr("src")!;
+//     const description = $(
+//         "#sitePage > main > div > nav > ol > li.breadcrumb-item.active > h1",
+//     )
+//         .text()
+//         .trim();
+//     const urlDownload = $(
+//         "#the-post > div > div.entry > div.btn-group > a.btn.btn-danger",
+//     ).attr("href");
+//     const examsList: {
+//         text: string;
+//         year: string;
+//         hasSolution: boolean;
+//         pathOfPdf: string;
+//     }[] = [];
+//     const realtedItems: { img: string; text: string; pathOfPdf: string }[] = [];
+
+//     if (
+//         $("#related_posts > div.post-listing > div.item-list-exams").length !==
+//         0
+//     ) {
+//         $("#related_posts > div.post-listing > div.item-list-exams").each(
+//             (_, ele) => {
+//                 const href = $(ele)
+//                     .find("div.btn-group > a.btn.btn-outline-secondary")
+//                     .attr("href")!;
+//                 const path = href.split("/").filter(Boolean).pop();
+//                 const item = {
+//                     text: $(ele)
+//                         .find("div.btn-group > a.btn.btn-outline-secondary")
+//                         .text()
+//                         .trim()!,
+//                     pathOfPdf: path || "",
+//                     year: $(ele)
+//                         .find("div.btn-group > a.btn.btn-secondary")
+//                         .text()
+//                         .trim()!,
+//                     hasSolution:
+//                         $(ele).find(
+//                             "div.btn-group > a.btn.btn-secondary span.fa.fa-times",
+//                         ).length === 0,
+//                 };
+//                 examsList.push(item);
+//             },
+//         );
+//     } else {
+//         $("#related_posts > div.post-listing > div.related-item").each(
+//             (_, el) => {
+//                 const href = $(el).find("h3 > a").attr("href")!;
+//                 const path = href.split("/").filter(Boolean).pop() || "";
+//                 const item = {
+//                     text: $(el).find("h3 a").text().trim(),
+//                     pathOfPdf: path,
+//                     img: $(el).find("img").attr("src")!,
+//                 };
+//                 realtedItems.push(item);
+//             },
+//         );
+//     }
+//    const rawViewerUrl = $(selector).attr("src") ?? "";
+
+//   return {
+//     viewerUrl: iframeUrl,                          // raw eddirasa viewer URL
+//     pdfFileUrl: (() => {                           // actual .pdf file URL
+//       try { return new URL(iframeUrl).searchParams.get("file"); }
+//       catch { return null; }
+//     })(),
+//     description,
+//     urlDownload,
+//     realtedItems,
+//     examsList,
+//   };
+// }
 
 // just for  cinq eme
 export async function finalStageExamsCinqEme() {

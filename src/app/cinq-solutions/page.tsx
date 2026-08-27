@@ -1,14 +1,14 @@
-import { bemSolutionsIndex } from "@/scraper";
+import { finalStageExamsCinqEme } from "@/scraper/finals";
 import SecondaryHeader from "@/components/SecondaryHeader";
-import BemTabsClient from "@/components/BemTabsClient";
+import CinqTabsClient from "@/components/CinqTabsClient";
 import Link from "next/link";
 import { Home, ChevronLeft } from "lucide-react";
 
 export const dynamic = "force-static";
 export const revalidate = 259200;
 
-export default async function BemSolutionsPage() {
-  const { years, subjects } = await bemSolutionsIndex();
+export default async function CinqSolutionsPage() {
+  const { years, subjects, description } = await finalStageExamsCinqEme();
 
   return (
     <main
@@ -18,7 +18,6 @@ export default async function BemSolutionsPage() {
       <SecondaryHeader />
 
       <div className="max-w-5xl mx-auto px-6 lg:px-8 py-10">
-
         {/* ─── Breadcrumb ─────────────────────────────────────────── */}
         <nav className="flex items-center gap-2 text-xs mb-6" style={{ color: "#AAA" }}>
           <Link
@@ -29,12 +28,12 @@ export default async function BemSolutionsPage() {
             <span>الرئيسية</span>
           </Link>
           <ChevronLeft className="w-3 h-3" />
-          <Link href="/ens-cm" className="hover:text-[#7C3AED] transition-colors">
-            التعليم المتوسط
+          <Link href="/ens-pri" className="hover:text-[#7C3AED] transition-colors">
+            التعليم الابتدائي
           </Link>
           <ChevronLeft className="w-3 h-3" />
           <span className="font-semibold" style={{ color: "#7C3AED" }}>
-            مواضيع وحلول BEM
+            مواضيع وحلول السنة الخامسة
           </span>
         </nav>
 
@@ -51,16 +50,16 @@ export default async function BemSolutionsPage() {
             style={{ fontSize: "clamp(1.4rem, 2.5vw, 2rem)" }}
           >
             مواضيع وحلول شهادة{" "}
-            <span className="text-[#7C3AED] italic">التعليم المتوسط</span>
+            <span className="text-[#7C3AED] italic">التعليم الابتدائي</span>
           </h1>
           <p className="text-xs max-w-md leading-relaxed" style={{ color: "#777" }}>
-            أرشيف منظم لمواضيع وحلول شهادة التعليم المتوسط في الجزائر حسب السنة والمادة.
+            {description ||
+              "أرشيف منظم لمواضيع وحلول شهادة التعليم الابتدائي (السنة الخامسة) في الجزائر."}
           </p>
         </div>
 
         {/* ─── Tabs (Client) ──────────────────────────────────────── */}
-        <BemTabsClient years={years} subjects={subjects} />
-
+        <CinqTabsClient years={years} subjects={subjects} />
       </div>
     </main>
   );

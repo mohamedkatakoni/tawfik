@@ -515,68 +515,95 @@ function extractPdfFileUrl(viewerUrl: string): string | null {
 
 // just for  cinq eme
 export async function finalStageExamsCinqEme() {
-    const selector = "#the-post > div > div.entry > div.toggle.tie-sc-close";
-    const url = `https://eddirasa.com/cinq-solutions`;
-    const $ = await cheerio.fromURL(url);
+    const url = `https://eddirasa.com/ens-pri/fifth-primary/cinq-solutions/`;
+    
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    }
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    // Extract page title and description using the new site structure
+    const titlePage = $(".ed-breadcrumb-title, h1.name.post-title").first().text().trim();
+    const description = $(".page-description, .tag-description-custom, .ed-global-description, div.entry > p").first().text().trim();
+
     const list: {
-        title: string;
-        numberOfMaterial: string;
-        linksOfPdfs: {
+        year: string;
+        items: {
             text: string;
             pathOfPdf: string;
             year: string;
             hasSolution: boolean;
         }[];
     }[] = [];
-    $(selector).each((i, el) => {
-        const semiList: {
+
+    // The new structure groups items by year blocks
+    const yearBlocks = $(".ed-legacy-year-block");
+
+    if (yearBlocks.length > 0) {
+        yearBlocks.each((_, yearBlock) => {
+            const year = $(yearBlock).attr("data-year") || "سنوات أخرى";
+            const items: {
+                text: string;
+                pathOfPdf: string;
+                year: string;
+                hasSolution: boolean;
+            }[] = [];
+
+            $(yearBlock).find(".ed-legacy-row").each((_, row) => {
+                const href = $(row).attr("href") || "";
+                const path = href.split("/").filter(Boolean).pop() || "";
+                
+                const text = $(row).attr("data-title") || $(row).attr("title") || $(row).find(".ed-legacy-title").text().trim();
+                const itemYear = $(row).attr("data-year") || $(row).find(".ed-legacy-year").text().trim() || year;
+                
+                // Check for solution using the new classes and data attributes
+                const hasSolution = $(row).hasClass("has-solution") || 
+                                    $(row).attr("data-solution") === "1" || 
+                                    $(row).find(".ed-legacy-solution i.bi-check-circle-fill").length > 0;
+
+                if (path) {
+                    items.push({ text, pathOfPdf: path, year: itemYear, hasSolution });
+                }
+            });
+
+            if (items.length > 0) {
+                list.push({ year, items });
+            }
+        });
+    } else {
+        // Fallback: If the page just outputs a flat list of rows without year blocks
+        const items: {
             text: string;
             pathOfPdf: string;
             year: string;
             hasSolution: boolean;
         }[] = [];
-        $(el)
-            .find("div.toggle-content > div ")
-            .each((_, ele) => {
-                const href = $(ele)
-                    .find("div.btn-group > a.btn.btn-outline-secondary")
-                    .attr("href")!;
-                const path = href.split("/").filter(Boolean).pop();
-                const semiItem = {
-                    text: $(ele)
-                        .find("div.btn-group > a.btn.btn-outline-secondary")
-                        .text()
-                        .trim()!,
-                    pathOfPdf: path || "",
-                    year: $(ele)
-                        .find("div.btn-group > a.btn.btn-secondary")
-                        .text()
-                        .trim()!,
-                    hasSolution:
-                        $(ele).find(
-                            "div.btn-group > a.btn.btn-secondary span.fa.fa-times",
-                        ).length === 0,
-                };
-                semiList.push(semiItem);
-                // btn btn-secondary active
-            });
-        const item = {
-            title: $(el).find("h3 > a > button.b-eddirasa").text().trim(),
-            numberOfMaterial: $(el)
-                .find("h3 > a > button.c-eddirasa > span")
-                .text()
-                .trim(),
-            linksOfPdfs: semiList,
-        };
-        list.push(item);
-    });
-    const titlePage = $("#the-post > div > h1").text().trim()!;
-    const description = $("#the-post > div > div.entry > p:nth-child(1)")
-        .text()
-        .trim()!;
+
+        $(".ed-legacy-row").each((_, row) => {
+            const href = $(row).attr("href") || "";
+            const path = href.split("/").filter(Boolean).pop() || "";
+            
+            const text = $(row).attr("data-title") || $(row).attr("title") || $(row).find(".ed-legacy-title").text().trim();
+            const itemYear = $(row).attr("data-year") || $(row).find(".ed-legacy-year").text().trim() || "";
+            
+            const hasSolution = $(row).hasClass("has-solution") || 
+                                $(row).attr("data-solution") === "1" || 
+                                $(row).find(".ed-legacy-solution i.bi-check-circle-fill").length > 0;
+
+            if (path) {
+                items.push({ text, pathOfPdf: path, year: itemYear, hasSolution });
+            }
+        });
+
+        if (items.length > 0) {
+            list.push({ year: "الكل", items });
+        }
+    }
+
     return { list, description, titlePage };
 }
-
 // just for bem
 export async function finalStageExamsBem(stage: string) {
     const selector = "#the-post > div > div.entry > table > tbody > tr";
@@ -1359,4 +1386,326 @@ export async function bacStreamScraperbranch(branch: string) {
     });
 
     return { title, description, years, branch };
+}
+
+
+export async function bemSolutionsIndex() {
+    const url = "https://eddirasa.com/ens-cm/4am/bem-solutions/";
+
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    }
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    // ── Tab 1: Years (حسب السنة) ─────────────────────────────────────
+    const years: {
+        year: string;
+        title: string;
+        slug: string; // e.g. "bem-2026" → يطابق route [bemyear]
+    }[] = [];
+
+    $(".bac-year-card").each((_, el) => {
+        const href = $(el).attr("href") || "";
+        const slug = href.split("/").filter(Boolean).pop() || "";
+
+        years.push({
+            year: $(el).find(".bac-year-icon").text().trim(),
+            title: $(el).find("strong").text().trim(),
+            slug,
+        });
+    });
+
+    // ── Tab 2: Subjects (حسب المادة) ─────────────────────────────────
+    const subjects: {
+        title: string;
+        subtitle: string;
+        icon: string;
+        color: string;
+        slug: string;
+        path: string;
+    }[] = [];
+
+    $(".bac-subject-hub-card").each((_, el) => {
+        const style = $(el).find(".bac-subject-icon").attr("style") || "";
+        const href = $(el).attr("href") || "";
+        const pathParts = href.split("/").filter(Boolean);
+        const subjectIndex = pathParts.indexOf("subject");
+
+        subjects.push({
+            title: $(el).find("strong").text().trim(),
+            subtitle: $(el).find("small").text().trim(),
+            icon: $(el).find("img").attr("src") || "",
+            color:
+                style.match(/--subject-color:\s*([^;"]+)/)?.[1]?.trim() ||
+                "#7C3AED",
+            slug: subjectIndex >= 0 ? pathParts[subjectIndex + 1] : "",
+            path: href,
+        });
+    });
+
+    return { years, subjects };
+}
+
+
+
+export async function bemYearSubjectsScraper(year: string) {
+    const url = `https://eddirasa.com/ens-cm/4am/bem-solutions/bem-${year}/`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    }
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    const title = $(".bac-archive-head h2").text().trim();
+    const description = $(".bac-archive-head p").first().text().trim();
+    const sectionTitle = $(".bac-section-title span").first().text().trim();
+
+    const subjects: {
+        title: string;
+        subtitle: string;
+        icon: string;
+        color: string;
+        topic: { path: string; text: string } | null;
+        correction: { path: string; text: string } | null;
+        detailedCorrection: { path: string; text: string } | null;
+    }[] = [];
+
+    $(".bac-smart-subject").each((_, el) => {
+        const $el = $(el);
+        const subjectTitle = $el.find("summary .bac-smart-copy strong").text().trim();
+        const subtitle = $el.find("summary .bac-smart-copy small").text().trim();
+        const iconEl = $el.find("summary .bac-subject-icon");
+        const icon = iconEl.find("img").attr("src") || "";
+        const color =
+            iconEl.attr("style")?.match(/--subject-color:\s*([^;"]+)/)?.[1]?.trim() ||
+            "#7C3AED";
+
+        let topic: { path: string; text: string } | null = null;
+        let correction: { path: string; text: string } | null = null;
+        let detailedCorrection: { path: string; text: string } | null = null;
+
+        $el.find(".bac-smart-action").each((_, action) => {
+            const $action = $(action);
+            const path = $action.attr("href")?.split("/").filter(Boolean).pop() || "";
+            const text = $action.find("strong").text().trim();
+
+            if ($action.hasClass("is-detailed-correction")) {
+                detailedCorrection = { path, text };
+            } else if ($action.hasClass("is-correction")) {
+                correction = { path, text };
+            } else if ($action.hasClass("is-topic")) {
+                topic = { path, text };
+            }
+        });
+
+        if (subjectTitle) {
+            subjects.push({ title: subjectTitle, subtitle, icon, color, topic, correction, detailedCorrection });
+        }
+    });
+
+    return { title, description, sectionTitle, subjects };
+}
+
+
+export async function bemSubjectScraper(subject: string) {
+    const url = `https://eddirasa.com/ens-cm/4am/bem-solutions/subject/${subject}/`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    }
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    // Title (h2) — clean
+    const title = $(".bac-archive-head h2").text().trim();
+
+    // Description (p) — remove google annotations
+    const pClone = $(".bac-archive-head p").first().clone();
+    pClone.find(".google-anno-skip, .google-anno, a").remove();
+    const description = pClone.text().trim();
+
+    // Results summary
+    const summary = $(".bac-results-summary").text().trim();
+
+    // Years sections
+    const years: {
+        yearTitle: string;
+        subjects: {
+            title: string;
+            subtitle: string;
+            icon: string;
+            color: string;
+            topic: { path: string; text: string } | null;
+            correction: { path: string; text: string } | null;
+        }[];
+    }[] = [];
+
+    $("section.bac-subject-year").each((_, section) => {
+        const yearTitle = $(section).find("h3").first().text().trim();
+
+        const subjects: {
+            title: string;
+            subtitle: string;
+            icon: string;
+            color: string;
+            topic: { path: string; text: string } | null;
+            correction: { path: string; text: string } | null;
+        }[] = [];
+
+        $(section).find(".bac-smart-subject").each((_, el) => {
+            const $el = $(el);
+            const subjectTitle = $el.find("summary .bac-smart-copy strong").text().trim();
+            const subtitle = $el.find("summary .bac-smart-copy small").text().trim();
+            const iconEl = $el.find("summary .bac-subject-icon");
+            const icon = iconEl.find("img").attr("src") || "";
+            const color =
+                iconEl.attr("style")?.match(/--subject-color:\s*([^;"]+)/)?.[1]?.trim() ||
+                "#7C3AED";
+
+            let topic: { path: string; text: string } | null = null;
+            let correction: { path: string; text: string } | null = null;
+
+            $el.find(".bac-smart-action").each((_, action) => {
+                const $action = $(action);
+                const path = $action.attr("href")?.split("/").filter(Boolean).pop() || "";
+                const text = $action.find("strong").text().trim();
+
+                if ($action.hasClass("is-correction")) {
+                    correction = { path, text };
+                } else if ($action.hasClass("is-topic")) {
+                    topic = { path, text };
+                }
+            });
+
+            if (subjectTitle) {
+                subjects.push({ title: subjectTitle, subtitle, icon, color, topic, correction });
+            }
+        });
+
+        if (yearTitle && subjects.length > 0) {
+            years.push({ yearTitle, subjects });
+        }
+    });
+
+    return { title, description, summary, years };
+}
+
+
+
+
+// ─── Generic archive scrapers (BEM / CINQ) ──────────────────────────────────
+
+export async function archiveIndex(base: string) {
+    const url = `https://eddirasa.com/${base}/`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    const $ = cheerio.load(await response.text());
+
+    const title = $(".ed-breadcrumb-title").text().trim();
+    const pClone = $(".bac-archive-head > p").first().clone();
+    pClone.find(".google-anno-skip, .google-anno").remove();
+    const description = pClone.text().trim();
+
+    const years = $(".bac-year-card").map((_, el) => ({
+        year: $(el).find(".bac-year-icon").text().trim(),
+        title: $(el).find("strong").text().trim(),
+        slug: ($(el).attr("href") || "").split("/").filter(Boolean).pop() || "",
+    })).get();
+
+    const subjects = $(".bac-subject-hub-card").map((_, el) => {
+        const style = $(el).find(".bac-subject-icon").attr("style") || "";
+        return {
+            title: $(el).find("strong").text().trim(),
+            subtitle: $(el).find("small").text().trim(),
+            icon: $(el).find("img").attr("src") || "",
+            color: style.match(/--subject-color:\s*([^;"]+)/)?.[1]?.trim() || "#7C3AED",
+            slug: ($(el).attr("href") || "").split("/").filter(Boolean).pop() || "",
+        };
+    }).get();
+
+    return { title, description, years, subjects };
+}
+
+export async function archiveYear(base: string, yearSlug: string) {
+    const url = `https://eddirasa.com/${base}/${yearSlug}/`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    const $ = cheerio.load(await response.text());
+
+    const title = $(".bac-archive-head h2").text().trim();
+    const pClone = $(".bac-archive-head > p").first().clone();
+    pClone.find(".google-anno-skip, .google-anno").remove();
+    const description = pClone.text().trim();
+
+    const subjects = $(".bac-smart-subject").map((_, el) => {
+        const $el = $(el);
+        const iconEl = $el.find("summary .bac-subject-icon");
+        const style = iconEl.attr("style") || "";
+
+        let topic: { path: string; text: string } | null = null;
+        let correction: { path: string; text: string } | null = null;
+        $el.find(".bac-smart-action").each((_, a) => {
+            const $a = $(a);
+            const path = ($a.attr("href") || "").split("/").filter(Boolean).pop() || "";
+            const text = $a.find("strong").text().trim();
+            if ($a.hasClass("is-correction")) correction = { path, text };
+            else if ($a.hasClass("is-topic")) topic = { path, text };
+        });
+
+        return {
+            title: $el.find("summary .bac-smart-copy strong").text().trim(),
+            subtitle: $el.find("summary .bac-smart-copy small").text().trim(),
+            icon: iconEl.find("img").attr("src") || "",
+            color: style.match(/--subject-color:\s*([^;"]+)/)?.[1]?.trim() || "#7C3AED",
+            topic,
+            correction,
+        };
+    }).get();
+
+    return { title, description, subjects };
+}
+
+export async function archiveSubject(base: string, subjectSlug: string) {
+    const url = `https://eddirasa.com/${base}/subject/${subjectSlug}/`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    const $ = cheerio.load(await response.text());
+
+    const title = $(".bac-archive-head h2").text().trim();
+    const summary = $(".bac-results-summary").text().trim();
+
+    const years = $("section.bac-subject-year").map((_, sec) => ({
+        year: $(sec).find("h3").first().text().trim(),
+        items: $(sec).find(".bac-smart-subject").map((_, el) => {
+            const $el = $(el);
+            const iconEl = $el.find("summary .bac-subject-icon");
+            const style = iconEl.attr("style") || "";
+
+            let topic: { path: string; text: string } | null = null;
+            let correction: { path: string; text: string } | null = null;
+            $el.find(".bac-smart-action").each((_, a) => {
+                const $a = $(a);
+                const path = ($a.attr("href") || "").split("/").filter(Boolean).pop() || "";
+                const text = $a.find("strong").text().trim();
+                if ($a.hasClass("is-correction")) correction = { path, text };
+                else if ($a.hasClass("is-topic")) topic = { path, text };
+            });
+
+            return {
+                title: $el.find("summary .bac-smart-copy strong").text().trim(),
+                subtitle: $el.find("summary .bac-smart-copy small").text().trim(),
+                icon: iconEl.find("img").attr("src") || "",
+                color: style.match(/--subject-color:\s*([^;"]+)/)?.[1]?.trim() || "#7C3AED",
+                topic,
+                correction,
+            };
+        }).get(),
+    })).get();
+
+    return { title, summary, years };
 }

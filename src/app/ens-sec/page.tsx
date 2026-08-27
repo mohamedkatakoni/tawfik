@@ -13,7 +13,7 @@ const stageMeta: Record<string, { num: string; bg: string; color: string }> = {
   "3as": { num: "3", bg: "#EDE9FE", color: "#4C1D95" },
 };
 
-
+import {finalbac} from "@/scraper/finals"
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
@@ -21,7 +21,7 @@ export default async function EnsSecPage() {
   const data = await enspri("ens-sec");
 
   const stages = data
-  
+  const certs = await finalbac('ens-sec/3as')
 
   return (
     <main
@@ -66,6 +66,45 @@ export default async function EnsSecPage() {
         </div>
 
         {/* Stages grid */}
+
+       {certs.length > 0 && (
+          <div className="mb-8 space-y-4">
+            <p
+              className="text-xs font-bold uppercase tracking-widest"
+              style={{ color: "#AAA" }}
+            >
+              الشهادات الرسمية
+            </p>
+            {certs.map((cert , ind) => (
+              <Link
+                key={`${cert.link}-${ind}`}
+                href={`/bac-solutions`}
+                className="group relative flex items-center justify-between px-8 py-6 rounded-3xl overflow-hidden transition-all hover:scale-[1.005] block"
+                style={{ background: "#1A1A1A" }}
+              >
+                <div>
+                  <p
+                    className="text-xs font-bold uppercase tracking-widest mb-1.5"
+                    style={{ color: "#7C3AED" }}
+                  >
+                    التعليم الثانوي
+                  </p>
+                  <h3 className="text-xl font-black text-white leading-tight">
+                    {cert.text}
+                  </h3>
+                </div>
+                <div
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white shrink-0 transition-colors group-hover:bg-[#6D28D9]"
+                  style={{ background: "#7C3AED" }}
+                >
+                  استعرض
+                  <ArrowLeft className="w-4 h-4" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        )} 
+
      <div className="grid sm:grid-cols-2 gap-4">
   {stages.map((stage, i) => {
     const meta = stageMeta[stage.link] ?? { num: "?", bg: "#EDE9FE", color: "#4C1D95" };
@@ -128,43 +167,7 @@ export default async function EnsSecPage() {
 </div>
 
         {/* Certificate section */}
-        {/* {certs.length > 0 && (
-          <div className="mt-8 space-y-4">
-            <p
-              className="text-xs font-bold uppercase tracking-widest"
-              style={{ color: "#AAA" }}
-            >
-              الشهادات الرسمية
-            </p>
-            {certs.map((cert) => (
-              <Link
-                key={cert.link}
-                href={`/${cert.link}`}
-                className="group relative flex items-center justify-between px-8 py-6 rounded-3xl overflow-hidden transition-all hover:scale-[1.005] block"
-                style={{ background: "#1A1A1A" }}
-              >
-                <div>
-                  <p
-                    className="text-xs font-bold uppercase tracking-widest mb-1.5"
-                    style={{ color: "#7C3AED" }}
-                  >
-                    التعليم الثانوي
-                  </p>
-                  <h3 className="text-xl font-black text-white leading-tight">
-                    {cert.text}
-                  </h3>
-                </div>
-                <div
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white shrink-0 transition-colors group-hover:bg-[#6D28D9]"
-                  style={{ background: "#7C3AED" }}
-                >
-                  استعرض
-                  <ArrowLeft className="w-4 h-4" />
-                </div>
-              </Link>
-            ))}
-          </div>
-        )} */}
+ 
 
       </div>
     </main>

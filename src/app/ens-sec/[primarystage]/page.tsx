@@ -63,7 +63,7 @@ export default async function Page({ params }: PageProps) {
   const materials = await educationalMaterial("ens-sec", primarystage);
   const stageName = stageNames[primarystage] || primarystage;
   const meta = stageMeta[primarystage] ?? { bg: "#EDE9FE", color: "#4C1D95", eyebrow: stageName };
-
+  const finalmaterials = materials.filter(el => !el.text.includes("تحضير"))
   return (
     <main
       className="min-h-screen font-['Tajawal']"
@@ -115,7 +115,7 @@ export default async function Page({ params }: PageProps) {
 
         {/* ─── Materials Grid ───────────────────────────────────────────── */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-  {materials.map((material) => {
+  {finalmaterials.map((material) => {
     const colors = materialColors[material.link] ?? {
       bg: "#EDE9FE",
       text: "#5B21B6",
@@ -170,7 +170,7 @@ export default async function Page({ params }: PageProps) {
 </div>
 
         {/* ─── Empty State ──────────────────────────────────────────────── */}
-        {materials.length === 0 && (
+        {finalmaterials.length === 0 && (
           <div className="text-center py-20">
             <div
               className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"

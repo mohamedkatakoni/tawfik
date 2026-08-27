@@ -336,7 +336,6 @@ async function fetchWithRetry(
   throw new Error("Max retries exceeded");
 }
 
-/* ─── main scraper ─── */
 export async function pdfIfarem(pdfurl: string) {
   const selector = "#articleFileFrame";
   const url = `https://eddirasa.com/${pdfurl}`;
@@ -403,21 +402,30 @@ export async function pdfIfarem(pdfurl: string) {
     });
   }
 
+  // ── resolve the 'file' param: absolute OR relative ──
+  let pdfFileUrl: string | null = null;
+  try {
+    const viewer = new URL(iframeUrl);
+    const rawFile = viewer.searchParams.get("file");
+    if (rawFile) {
+      pdfFileUrl = rawFile.startsWith("http")
+        ? rawFile
+        : new URL(rawFile, "https://eddirasa.com").href;
+    }
+  } catch {
+    pdfFileUrl = null;
+  }
+
   return {
     viewerUrl: iframeUrl,
-    pdfFileUrl: (() => {
-      try {
-        return new URL(iframeUrl).searchParams.get("file");
-      } catch {
-        return null;
-      }
-    })(),
+    pdfFileUrl,
     description,
     urlDownload,
     realtedItems,
     examsList,
   };
 }
+
 function extractPdfFileUrl(viewerUrl: string): string | null {
   try {
     return new URL(viewerUrl).searchParams.get("file");
@@ -1032,4 +1040,323 @@ export async function bacScraper(urlPath: string) {
     });
 
     return { tabGroups };
+}
+
+
+
+export async function bacSolutionsIndex() {
+    const url = "https://eddirasa.com/ens-sec/3as/bac-solutions/";
+
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    }
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    // ── Tab 1: Years (حسب السنة) ─────────────────────────────────────
+    const years: {
+        year: string;
+        title: string;
+        slug: string; // Internal slug like "2026"
+        isLegacy: boolean;
+    }[] = [];
+
+    $(".bac-year-card").each((_, el) => {
+        const year = $(el).find(".bac-year-icon").text().trim();
+        const href = $(el).attr("href") || "";
+        
+        // Extract year slug from path
+        // e.g., "/ens-sec/3as/bac-solutions/bac-2026/" → "2026"
+        // e.g., "/bac-2007/" → "2007"
+        const pathParts = href.split("/").filter(Boolean);
+        const yearSegment = pathParts.find(p => p.startsWith("bac-")) || "";
+        const slug = yearSegment.replace("bac-", "") || year;
+
+        years.push({
+            year,
+            title: $(el).find("strong").text().trim(),
+            slug,
+            isLegacy: $(el).hasClass("bac-legacy-year-card"),
+        });
+    });
+
+    // ── Tab 2: Subjects (حسب المادة) ─────────────────────────────────
+    const subjects: {
+        title: string;
+        subtitle: string;
+        icon: string;
+        color: string;
+        slug: string; // Internal slug like "mathematics"
+    }[] = [];
+
+    $(".bac-subject-hub-card").each((_, el) => {
+        const style = $(el).find(".bac-subject-icon").attr("style") || "";
+        const href = $(el).attr("href") || "";
+        
+        // Extract subject slug from path
+        // e.g., "/ens-sec/3as/bac-solutions/subject/mathematics/" → "mathematics"
+        const pathParts = href.split("/").filter(Boolean);
+        const subjectIndex = pathParts.indexOf("subject");
+        const slug = subjectIndex >= 0 ? pathParts[subjectIndex + 1] : "";
+
+        subjects.push({
+            title: $(el).find("strong").text().trim(),
+            subtitle: $(el).find("small").text().trim(),
+            icon: $(el).find("img").attr("src") || "",
+            color:
+                style.match(/--subject-color:\s*([^;"]+)/)?.[1]?.trim() ||
+                "#7C3AED",
+            slug,
+        });
+    });
+
+    // ── Tab 3: Streams (حسب الشعبة) ──────────────────────────────────
+    const streams: { 
+        title: string; 
+        slug: string; // Internal slug like "sciences"
+    }[] = [];
+
+    $(".bac-stream-card").each((_, el) => {
+        const href = $(el).attr("href") || "";
+        
+        // Extract stream slug from path
+        // e.g., "/ens-sec/3as/bac-solutions/stream/sciences/" → "sciences"
+        const pathParts = href.split("/").filter(Boolean);
+        const streamIndex = pathParts.indexOf("stream");
+        const slug = streamIndex >= 0 ? pathParts[streamIndex + 1] : "";
+
+        streams.push({
+            title: $(el).find("strong").text().trim(),
+            slug,
+        });
+    });
+
+    return { years, subjects, streams };
+}
+
+export async function bacYearScraper(year: string) {
+    const url = `https://eddirasa.com/ens-sec/3as/bac-solutions/bac-${year}/`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    }
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    // Extract title from breadcrumb
+    const title = $(".ed-breadcrumb-title").text().trim();
+    
+    // Extract description from header
+    const description = $(".bac-archive-head p").first().text().trim();
+
+    // Extract streams
+    const streams: {
+        title: string;
+        subtitle: string;
+        path: string;
+        slug: string;
+    }[] = [];
+
+    $(".bac-stream-card").each((_, el) => {
+        const title = $(el).find("strong").text().trim();
+        const subtitle = $(el).find("small").text().trim();
+        const href = $(el).attr("href") || "";
+        
+        // Extract slug from path (e.g., "sciences" from "/ens-sec/3as/bac-solutions/bac-2026/sciences/")
+        const pathParts = href.split("/").filter(Boolean);
+        const slug = pathParts[pathParts.length - 1] || "";
+
+        streams.push({
+            title,
+            subtitle,
+            path: href,
+            slug,
+        });
+    });
+
+    return { title, description, year, streams };
+}
+
+
+
+export async function bacStreamScraper(year: string, stream: string) {
+    const url = `https://eddirasa.com/ens-sec/3as/bac-solutions/bac-${year}/${stream}/`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    }
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    const title = $(".ed-breadcrumb-title").text().trim();
+    const description = $(".bac-archive-head > p").first().text().trim();
+
+    const subjects: {
+        title: string;
+        subtitle: string;
+        icon: string;
+        color: string;
+        topic: { path: string; text: string } | null;
+        correction: { path: string; text: string } | null;
+        detailedCorrection: { path: string; text: string } | null;
+    }[] = [];
+
+    $(".bac-smart-subject").each((_, el) => {
+        const $el = $(el);
+        const title = $el.find("summary .bac-smart-copy strong").text().trim();
+        const subtitle = $el.find("summary .bac-smart-copy small").text().trim();
+
+        const iconEl = $el.find("summary .bac-subject-icon");
+        const icon = iconEl.find("img").attr("src") || "";
+        const colorMatch = iconEl.attr("style")?.match(/--subject-color:\s*([^;"]+)/);
+        const color = colorMatch?.[1]?.trim() || "#7C3AED";
+
+        let topic = null;
+        let correction = null;
+        let detailedCorrection = null;
+
+        $el.find(".bac-smart-action").each((__, action) => {
+            const $action = $(action);
+            const path = $action.attr("href") || "";
+            const text = $action.find("strong").text().trim();
+
+            if ($action.hasClass("is-detailed-correction")) {
+                detailedCorrection = { path, text };
+            } else if ($action.hasClass("is-correction")) {
+                correction = { path, text };
+            } else if ($action.hasClass("is-topic")) {
+                topic = { path, text };
+            }
+        });
+
+        if (title) {
+            subjects.push({ title, subtitle, icon, color, topic, correction, detailedCorrection });
+        }
+    });
+
+    return { title, description, year, stream, subjects };
+}
+
+
+
+export async function bacSubjectScraper(subject: string) {
+    const url = `https://eddirasa.com/ens-sec/3as/bac-solutions/subject/${subject}/`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    }
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    // Extract header info
+    const title = $(".bac-archive-head h2").text().trim();
+    const description = $(".bac-archive-head p").first().text().trim();
+    const summary = $(".bac-results-summary").text().trim();
+
+    // Extract icon color and image (from first subject card)
+    const firstIcon = $(".bac-smart-subject summary .bac-subject-icon").first();
+    const colorMatch = firstIcon.attr("style")?.match(/--subject-color:\s*([^;"]+)/);
+    const color = colorMatch?.[1]?.trim() || "#7C3AED";
+    const icon = firstIcon.find("img").attr("src") || "";
+
+    // Extract subjects grouped by year
+    const years: {
+        year: string;
+        subjects: {
+            title: string;
+            subtitle: string;
+            topic: { path: string; text: string } | null;
+            correction: { path: string; text: string } | null;
+            detailedCorrection: { path: string; text: string } | null;
+        }[];
+    }[] = [];
+
+    $(".bac-subject-year").each((_, yearSection) => {
+        const year = $(yearSection).find("h3").first().text().trim();
+
+        const subjects: {
+            title: string;
+            subtitle: string;
+            topic: { path: string; text: string } | null;
+            correction: { path: string; text: string } | null;
+            detailedCorrection: { path: string; text: string } | null;
+        }[] = [];
+
+        $(yearSection).find(".bac-smart-subject").each((__, item) => {
+            const $item = $(item);
+            const title = $item.find("summary strong").text().trim();
+            const subtitle = $item.find("summary small").text().trim();
+
+            let topic = null;
+            let correction = null;
+            let detailedCorrection = null;
+
+            $item.find(".bac-smart-action").each((___, action) => {
+                const $action = $(action);
+                const path = $action.attr("href") || "";
+                const text = $action.find("strong").text().trim();
+
+                if ($action.hasClass("is-detailed-correction")) {
+                    detailedCorrection = { path, text };
+                } else if ($action.hasClass("is-correction")) {
+                    correction = { path, text };
+                } else if ($action.hasClass("is-topic")) {
+                    topic = { path, text };
+                }
+            });
+
+            if (title) {
+                subjects.push({ title, subtitle, topic, correction, detailedCorrection });
+            }
+        });
+
+        if (year && subjects.length > 0) {
+            years.push({ year, subjects });
+        }
+    });
+
+    return { title, description, summary, color, icon, years };
+}
+
+
+export async function bacStreamScraperbranch(branch: string) {
+    const url = `https://eddirasa.com/ens-sec/3as/bac-solutions/stream/${branch}/`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    }
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    const title = $(".bac-archive-head h2").text().trim();
+    const description = $(".bac-archive-head p").first().text().trim();
+
+    const years: {
+        year: string;
+        title: string;
+        path: string;
+    }[] = [];
+
+    $(".bac-stream-year-card").each((_, el) => {
+        const year = $(el).find(".bac-stream-year-icon").text().trim();
+        const title = $(el).find("strong").text().trim();
+        const href = $(el).attr("href") || "";
+
+        // Extract year slug from path
+        const pathParts = href.split("/").filter(Boolean);
+        const yearSlug = pathParts.find(p => p.startsWith("bac-")) || "";
+
+        years.push({
+            year,
+            title,
+            path: yearSlug,
+        });
+    });
+
+    return { title, description, years, branch };
 }

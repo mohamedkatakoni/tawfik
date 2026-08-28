@@ -45,7 +45,8 @@ export const revalidate = 259200;
 
 export default async function SubCategoryPage({ params }: PageProps) {
   const { primarystage, material, pdfsmaterial } = await params;
-  const data = await subCategoryPdfs("ens-pri", primarystage, material, pdfsmaterial);
+  const urlpath = `https://eddirasa.com/ens-pri/pedagogy/`
+  const data = await subCategoryPdfs("ens-pri", undefined, undefined, undefined,urlpath);
 
   const stageName = stageNames[primarystage] || primarystage;
   const materialName = materialNames[material] || material;

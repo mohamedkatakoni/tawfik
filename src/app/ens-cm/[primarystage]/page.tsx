@@ -46,6 +46,7 @@ type PageProps = {
 export default async function MiddleStagePage({ params }: PageProps) {
   const { primarystage } = await params;
   const materials = await educationalMaterial("ens-cm", primarystage);
+  const data =  materials.filter(el => !el.text.includes("تحضير"))
   const stageName = stageNames[primarystage] || primarystage;
   const meta = stageMeta[primarystage] ?? { bg: "#EDE9FE", color: "#4C1D95" };
 
@@ -97,7 +98,7 @@ export default async function MiddleStagePage({ params }: PageProps) {
 
         {/* Materials Grid */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {materials.map((material) => {
+          {data.map((material) => {
             const colors = materialColors[material.link] ?? {
               bg: "#EDE9FE",
               text: "#5B21B6",
@@ -149,7 +150,7 @@ export default async function MiddleStagePage({ params }: PageProps) {
         </div>
 
         {/* Empty state */}
-        {materials.length === 0 && (
+        {data.length === 0 && (
           <div className="text-center py-20">
             <div
               className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"

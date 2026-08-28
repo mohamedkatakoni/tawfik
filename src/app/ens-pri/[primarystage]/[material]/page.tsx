@@ -1,6 +1,6 @@
 import { specificMaterialPdfs } from "@/scraper";
 import Link from "next/link";
-import { getCategoryIcon } from "@/utils";
+
 import {
   Home,
   ChevronLeft,
@@ -156,7 +156,7 @@ export default async function MaterialPage({ params }: PageProps) {
                       </div>
                       <div className="text-right">
                         <h3 className="font-black text-lg md:text-xl" style={{ color: style.text }}>
-                          {category.categoryTitle}
+                          {category.categoryTitle} 
                         </h3>
                         <p className="text-xs font-bold mt-1" style={{ color: style.text, opacity: 0.7 }}>
                           {category.items.length} فروع • {totalCategoryFiles} ملف
@@ -180,7 +180,8 @@ export default async function MaterialPage({ params }: PageProps) {
                             className="font-bold text-sm block truncate leading-relaxed" 
                             style={{ color: style.text }}
                           >
-                            {item.title}
+                            {item.title} 
+                            {/* {item.path} */}
                           </span>
                           <div className="flex items-center gap-1.5 mt-1.5">
                             <FileText className="w-3.5 h-3.5" style={{ color: style.text, opacity: 0.6 }} />

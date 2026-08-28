@@ -120,10 +120,11 @@ export async function educationalMaterial(stage: string, level: string) {
 // }
 
 export async function subCategoryPdfs(
-    stage: string,
-    level: string,
-    material: string,
-    pdfsMaterial: string,
+    stage?: string,
+    level?: string,
+    material?: string,
+    pdfsMaterial?: string,
+    urlpath?:string,
 ) {
     const url =
         `https://eddirasa.com/${stage}/${level}/${material}/${pdfsMaterial}/`.replace(
@@ -131,7 +132,7 @@ export async function subCategoryPdfs(
             "$1",
         );
 
-    const response = await fetch(url);
+    const response = await fetch(urlpath ?? url);
     if (!response.ok) {
         throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
     }

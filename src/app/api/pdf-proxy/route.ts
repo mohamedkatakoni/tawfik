@@ -1,7 +1,9 @@
 // src/app/api/pdf-proxy/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { PDFDocument } from "pdf-lib";
 
 const ALLOWED_HOSTNAME = "eddirasa.com";
+const SITE_NAME = "تawfikdz.online | توفيق";
 
 function isAllowedUrl(url: string): boolean {
   try {
@@ -60,6 +62,30 @@ function cleanFilename(title: string): string {
     .trim();
 }
 
+/**
+ * Inject Title, Author, Creator into PDF metadata so the browser
+ * PDF viewer toolbar shows the real document name instead of "pdf-proxy".
+ * Falls back to the original bytes if pdf-lib fails for any reason.
+ */
+async function injectPdfMetadata(
+  bytes: Uint8Array,
+  title: string
+): Promise<Uint8Array> {
+  try {
+    const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
+    pdf.setTitle(title);
+    pdf.setAuthor(SITE_NAME);
+    pdf.setCreator(SITE_NAME);
+    pdf.setProducer(SITE_NAME);
+    // Keep existing Subject if any, otherwise set it
+    if (!pdf.getSubject()) pdf.setSubject(title);
+    return await pdf.save();
+  } catch {
+    // Encrypted or malformed PDF — return as-is, at least the filename is right
+    return bytes;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const encoded = req.nextUrl.searchParams.get("r");
   const rawUrl = req.nextUrl.searchParams.get("url");
@@ -96,24 +122,34 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // ── Pretty filename: توفيق - <title>.pdf ──
+  // ── Decode the document title ─────────────────────────────────────────────
+  let docTitle = "توفيق - tawfikdz.online";
   let filename = "tawfik.pdf";
+
   if (encodedTitle) {
     try {
-      const title = decodeBase64Url(encodedTitle);
-      const clean = cleanFilename(title);
-      if (clean) filename = `توفيق - ${clean}.pdf`;
+      const raw = decodeBase64Url(encodedTitle);
+      const clean = cleanFilename(raw);
+      if (clean) {
+        docTitle = `${clean} | tawfikdz.online`;
+        filename = `توفيق - ${clean}.pdf`;
+      }
     } catch {}
   }
 
+  // ── Fetch all bytes then patch the PDF metadata ───────────────────────────
+  const originalBytes = new Uint8Array(await upstream.arrayBuffer());
+  const patchedBytes = await injectPdfMetadata(originalBytes, docTitle);
+
   const headers = new Headers({
-    "Content-Type": upstream.headers.get("content-type") ?? "application/pdf",
+    "Content-Type": "application/pdf",
     "Content-Security-Policy": "frame-ancestors 'self'",
     "X-Frame-Options": "SAMEORIGIN",
     "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
-    // UTF-8 filename for Arabic text + ASCII fallback for old browsers
-    "Content-Disposition": `inline; filename="tawfik.pdf"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    "Content-Length": String(patchedBytes.byteLength),
+    // RFC 5987 UTF-8 filename — used for Save As dialog
+    "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(filename)}`,
   });
 
-  return new NextResponse(upstream.body, { status: 200, headers });
+  return new NextResponse(Buffer.from(patchedBytes), { status: 200, headers });
 }

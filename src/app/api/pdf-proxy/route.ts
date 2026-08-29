@@ -19,7 +19,6 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/* Base64URL decode */
 function decodeBase64Url(str: string): string {
   const padding = "=".repeat((4 - (str.length % 4)) % 4);
   const base64 = str.replace(/-/g, "+").replace(/_/g, "/") + padding;
@@ -52,10 +51,19 @@ async function fetchPdfWithRetry(pdfUrl: string, retries = 3): Promise<Response>
   throw new Error("Max retries exceeded");
 }
 
+function cleanFilename(title: string): string {
+  return title
+    .replace(/eddirasa\.com/gi, "")
+    .replace(/https?:\/\//g, "")
+    .replace(/[<>:"/\\|?*]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export async function GET(req: NextRequest) {
-  // ── support BOTH ?r= (new) and ?url= (old / legacy) ──
   const encoded = req.nextUrl.searchParams.get("r");
   const rawUrl = req.nextUrl.searchParams.get("url");
+  const encodedTitle = req.nextUrl.searchParams.get("t");
 
   let pdfUrl: string;
   if (encoded) {
@@ -88,15 +96,23 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // ── stream back with headers that ALLOW iframe display ──
+  // ── Pretty filename: توفيق - <title>.pdf ──
+  let filename = "tawfik.pdf";
+  if (encodedTitle) {
+    try {
+      const title = decodeBase64Url(encodedTitle);
+      const clean = cleanFilename(title);
+      if (clean) filename = `توفيق - ${clean}.pdf`;
+    } catch {}
+  }
+
   const headers = new Headers({
-    "Content-Type":
-      upstream.headers.get("content-type") ?? "application/pdf",
+    "Content-Type": upstream.headers.get("content-type") ?? "application/pdf",
     "Content-Security-Policy": "frame-ancestors 'self'",
     "X-Frame-Options": "SAMEORIGIN",
     "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
-    // CRITICAL: force inline display so the browser renders it instead of downloading
-    "Content-Disposition": "inline",
+    // UTF-8 filename for Arabic text + ASCII fallback for old browsers
+    "Content-Disposition": `inline; filename="tawfik.pdf"; filename*=UTF-8''${encodeURIComponent(filename)}`,
   });
 
   return new NextResponse(upstream.body, { status: 200, headers });

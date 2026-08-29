@@ -43,6 +43,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 /* Base64URL encode (browser-safe) */
 function toBase64Url(str: string): string {
+  if (!str) return "";
   return Buffer.from(str, "utf-8")
     .toString("base64")
     .replace(/\+/g, "-")
@@ -62,9 +63,9 @@ export default async function PdfPage({ params }: PageProps) {
   } = await pdfIfarem(pdfurl);
 
   // ── Brave-safe proxy URL (no ?url=https://… pattern) ──
-  const proxiedUrl = pdfFileUrl
-    ? `/api/pdf-proxy?r=${toBase64Url(pdfFileUrl)}`
-    : null;
+const proxiedUrl = pdfFileUrl
+  ? `/api/pdf-proxy?r=${toBase64Url(pdfFileUrl)}&t=${toBase64Url(description || "ملف-PDF")}`
+  : null;
 
   const documentSchema = {
     "@context": "https://schema.org",

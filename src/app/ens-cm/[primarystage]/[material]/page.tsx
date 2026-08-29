@@ -197,6 +197,7 @@ export default async function MaterialPage({ params }: PageProps) {
                             style={{ color: style.text }}
                           >
                             {item.title}
+                            {/* {item.path} */}
                           </span>
                           <div className="flex items-center gap-1.5 mt-1.5">
                             <FileText className="w-3.5 h-3.5" style={{ color: style.text, opacity: 0.6 }} />

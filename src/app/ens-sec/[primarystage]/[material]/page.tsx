@@ -241,6 +241,7 @@ export default async function MaterialPage({ params }: PageProps) {
                 <div className="px-6 md:px-7 pb-6 md:pb-7">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {category.items.map((item, itemIndex) => (
+                      item.path.includes("video-lessons") ? null :
                       <Link
                         key={itemIndex}
                         href={item.path}
@@ -251,7 +252,8 @@ export default async function MaterialPage({ params }: PageProps) {
                             className="font-bold text-sm block truncate leading-relaxed" 
                             style={{ color: style.text }}
                           >
-                            {item.title}
+                            {/* {item.title} */}
+                            {item.path}
                           </span>
                           <div className="flex items-center gap-1.5 mt-1.5">
                             <FileText className="w-3.5 h-3.5" style={{ color: style.text, opacity: 0.6 }} />

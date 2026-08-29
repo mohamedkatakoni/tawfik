@@ -10,13 +10,11 @@ type PageProps = {
     pdfsmaterial: string;
   }>;
 };
-
 const stageNames: Record<string, string> = {
-  "first-primary": "السنة الأولى إبتدائي",
-  "second-primary": "السنة الثانية إبتدائي",
-  "third-primary": "السنة الثالثة إبتدائي",
-  "fourth-primary": "السنة الرابعة إبتدائي",
-  "fifth-primary": "السنة الخامسة إبتدائي",
+  "1am": "السنة الأولى متوسط",
+  "2am": "السنة الثانية متوسط",
+  "3am": "السنة الثالثة متوسط",
+  "4am": "السنة الرابعة متوسط",
 };
 
 const materialNames: Record<string, string> = {
@@ -29,23 +27,25 @@ const materialNames: Record<string, string> = {
   english: "اللغة الإنجليزية",
   "history-geography": "التاريخ والجغرافيا",
   amazigh: "اللغة الأمازيغية",
+  art: "التربية الفنية",
   "cinq-solutions": "مواضيع وحلول",
 };
 
 const stageMeta: Record<string, { bg: string; color: string }> = {
-  "first-primary": { bg: "#D1FAE5", color: "#065F46" },
-  "second-primary": { bg: "#DBEAFE", color: "#1E40AF" },
-  "third-primary": { bg: "#FEF3C7", color: "#92400E" },
-  "fourth-primary": { bg: "#EDE9FE", color: "#4C1D95" },
-  "fifth-primary": { bg: "#FCE7F3", color: "#9D174D" },
+  "1am": { bg: "#DBEAFE", color: "#1E40AF" },
+  "2am": { bg: "#FEF3C7", color: "#92400E" },
+  "3am": { bg: "#EDE9FE", color: "#4C1D95" },
+  "4am": { bg: "#FCE7F3", color: "#9D174D" },
 };
+
 
 export const dynamic = 'force-static';
 export const revalidate = 259200;
 
 export default async function SubCategoryPage({ params }: PageProps) {
   const { primarystage, material, pdfsmaterial } = await params;
-  const data = await subCategoryPdfs("ens-pri", primarystage, material, pdfsmaterial);
+  const urlpath = `https://eddirasa.com/ens-cm/${primarystage}/notes/`
+  const data = await subCategoryPdfs(undefined, undefined, undefined, undefined,urlpath);
 
   const stageName = stageNames[primarystage] || primarystage;
   const materialName = materialNames[material] || material;
@@ -59,7 +59,7 @@ export default async function SubCategoryPage({ params }: PageProps) {
 
         {/* ─── Breadcrumb (بدون تغيير) ─────────────────────────────── */}
         <nav className="flex items-center gap-2 text-xs mb-6" style={{ color: "#AAA" }}>
-          <Link href="/" className="flex items-cenملفات وأدواتter gap-1 hover:text-[#7C3AED] transition-colors">
+          <Link href="/" className="flex items-center gap-1 hover:text-[#7C3AED] transition-colors">
             <Home className="w-3 h-3" />
             <span>الرئيسية</span>
           </Link>

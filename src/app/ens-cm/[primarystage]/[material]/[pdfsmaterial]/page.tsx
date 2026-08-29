@@ -1,7 +1,7 @@
 import { subCategoryPdfs } from "@/scraper";
 import Link from "next/link";
 import { Home, ChevronLeft, FileText, Calendar } from "lucide-react";
-import SubCategoryClient from "./SubCategoryClient";
+import SubCategoryClient from "@/components/SubCategoryClient";
 
 type PageProps = {
   params: Promise<{
@@ -101,7 +101,7 @@ export default async function SubCategoryPage({ params }: PageProps) {
         </div>
 
         {/* ─── الأدوات + القائمة (Client Component) ────────────────── */}
-        <SubCategoryClient itemsByYear={data.itemsByYear} meta={meta} />
+        <SubCategoryClient title={data.title} itemsByYear={data.itemsByYear} meta={meta} />
 
       </div>
     </main>

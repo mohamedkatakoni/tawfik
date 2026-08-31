@@ -5,13 +5,8 @@ import Link from "next/link";
 import SecondaryHeader from "@/components/SecondaryHeader";
 import DownloadButton from "@/components/DownloadButton";
 import {
-  FileText,
-  ExternalLink,
-  CheckCircle2,
-  XCircle,
-  Eye,
-  ChevronLeft,
-  Home,
+  FileText, ExternalLink, CheckCircle2,
+  XCircle, Eye, ChevronLeft, Home,
 } from "lucide-react";
 
 type PageProps = {
@@ -21,27 +16,9 @@ type PageProps = {
 export const dynamic = "force-static";
 export const revalidate = 259200;
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { pdfurl } = await params;
-  const { description } = await pdfIfarem(pdfurl);
+const SITE_URL = "https://tawfikdz.online";
 
-  const title = description || "ملف PDF";
-  const seoDescription = `تصفح وحمّل مجاناً: ${title}. مواضيع وحلول وفروض محلولة على موقع توفيق — المنصة التعليمية الجزائرية.`;
-
-  return {
-    title,
-    description: seoDescription,
-    openGraph: {
-      title: `${title} | توفيق`,
-      description: seoDescription,
-      type: "article",
-    },
-    robots: { index: true, follow: true },
-    alternates: { canonical: `/pdf/${pdfurl}` },
-  };
-}
-
-/* Base64URL encode (browser-safe) */
+/* Base64URL encode */
 function toBase64Url(str: string): string {
   if (!str) return "";
   return Buffer.from(str, "utf-8")
@@ -51,10 +28,71 @@ function toBase64Url(str: string): string {
     .replace(/=+$/, "");
 }
 
+/* Build safe filename for the proxy URL path */
+function toSafeFilename(str: string): string {
+  return str
+    .replace(/[<>:"/\\|?*]/g, "-")
+    .replace(/\s+/g, "-")
+    .trim();
+}
+
+/* Extract keywords from Arabic document title */
+function extractKeywords(title: string): string[] {
+  const base = ["توفيق", "tawfikdz", "ملفات PDF تعليمية", "الجزائر"];
+  const levelMap: Record<string, string[]> = {
+    "بكالوريا": ["بكالوريا", "BAC", "مواضيع بكالوريا", "حلول بكالوريا"],
+    "BAC":      ["بكالوريا", "BAC", "مواضيع بكالوريا"],
+    "متوسط":   ["تعليم متوسط", "BEM", "مواضيع متوسط"],
+    "BEM":     ["BEM", "شهادة التعليم المتوسط", "مواضيع BEM"],
+    "ابتدائي": ["تعليم ابتدائي", "السنة الخامسة", "مواضيع ابتدائي"],
+    "ثانوي":   ["تعليم ثانوي", "مواضيع ثانوي"],
+    "رياضيات": ["رياضيات", "مواضيع رياضيات", "حلول رياضيات"],
+    "فيزياء":  ["فيزياء", "علوم فيزيائية", "مواضيع فيزياء"],
+    "عربية":   ["لغة عربية", "مواضيع عربية"],
+    "فرنسية":  ["لغة فرنسية", "مواضيع فرنسية"],
+    "تاريخ":   ["تاريخ وجغرافيا", "مواضيع تاريخ"],
+    "علوم":    ["علوم طبيعية", "مواضيع علوم"],
+  };
+  const extra: string[] = [];
+  for (const [key, vals] of Object.entries(levelMap)) {
+    if (title.includes(key)) extra.push(...vals);
+  }
+  return [...new Set([title, ...extra, ...base])];
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { pdfurl } = await params;
+  const { description } = await pdfIfarem(pdfurl);
+
+  const title = description || "ملف PDF تعليمي";
+  const seoDescription = `تصفح وحمّل مجاناً: ${title}. مواضيع وحلول وفروض محلولة على موقع توفيق — المنصة التعليمية الجزائرية المجانية. بدون تسجيل.`;
+  const canonical = `${SITE_URL}/pdf/${pdfurl}`;
+
+  return {
+    title: `${title} | توفيق`,
+    description: seoDescription,
+    keywords: extractKeywords(title),
+    alternates: { canonical },
+    openGraph: {
+      title: `${title} | توفيق`,
+      description: seoDescription,
+      url: canonical,
+      siteName: "توفيق",
+      locale: "ar_DZ",
+      type: "article",
+    },
+    twitter: {
+      card: "summary",
+      title: `${title} | توفيق`,
+      description: seoDescription,
+    },
+    robots: { index: true, follow: true },
+  };
+}
+
 export default async function PdfPage({ params }: PageProps) {
   const { pdfurl } = await params;
   const {
-    viewerUrl,
     pdfFileUrl,
     description,
     urlDownload,
@@ -62,24 +100,59 @@ export default async function PdfPage({ params }: PageProps) {
     examsList,
   } = await pdfIfarem(pdfurl);
 
-  // ── Brave-safe proxy URL (no ?url=https://… pattern) ──
-const proxiedUrl = pdfFileUrl
-  ? `/api/pdf-proxy?r=${toBase64Url(pdfFileUrl)}&t=${toBase64Url(description || "ملف-PDF")}`
-  : null;
+  const safeTitle = toSafeFilename(description || "ملف-PDF");
+
+  // Title in URL path → browser PDF viewer shows it in toolbar
+  // NOTE: no .pdf extension — Next.js treats .pdf path segments as static files → 404
+  const proxiedUrl = pdfFileUrl
+    ? `/api/pdf-proxy/${encodeURIComponent(safeTitle)}?r=${toBase64Url(pdfFileUrl)}`
+    : null;
+
+  // ── JSON-LD ───────────────────────────────────────────────────────────────
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "الرئيسية", item: SITE_URL },
+      { "@type": "ListItem", position: 2, name: description || "ملف PDF", item: `${SITE_URL}/pdf/${pdfurl}` },
+    ],
+  };
 
   const documentSchema = {
     "@context": "https://schema.org",
     "@type": "DigitalDocument",
     name: description || "ملف PDF",
-    description: `${description} — متاح مجاناً على موقع توفيق`,
+    description: `${description || "ملف PDF"} — متاح مجاناً على موقع توفيق`,
+    url: `${SITE_URL}/pdf/${pdfurl}`,
     inLanguage: "ar",
     encodingFormat: "application/pdf",
     isAccessibleForFree: true,
-    publisher: { "@type": "EducationalOrganization", name: "توفيق" },
+    accessMode: ["textual", "visual"],
+    accessibilityFeature: ["readingOrder", "structuralNavigation"],
+    publisher: {
+      "@type": "EducationalOrganization",
+      name: "توفيق",
+      url: SITE_URL,
+    },
+    provider: {
+      "@type": "EducationalOrganization",
+      name: "توفيق",
+      url: SITE_URL,
+    },
+    teaches: description || "محتوى تعليمي جزائري",
+    educationalLevel: "Algeria K-12",
+    audience: {
+      "@type": "EducationalAudience",
+      educationalRole: "student",
+    },
   };
 
   return (
     <main className="min-h-screen font-['Tajawal']" style={{ background: "#F7F3EC" }}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(documentSchema) }}
@@ -88,17 +161,15 @@ const proxiedUrl = pdfFileUrl
       <SecondaryHeader />
 
       <div className="max-w-6xl mx-auto px-6 lg:px-8 py-10">
+
         {/* Breadcrumb */}
-        <nav className="flex items-center gap-2 text-sm mb-8" style={{ color: "#AAA" }}>
-          <Link
-            href="/"
-            className="flex items-center gap-1 hover:text-[#7C3AED] transition-colors"
-          >
+        <nav aria-label="breadcrumb" className="flex items-center gap-2 text-sm mb-8" style={{ color: "#AAA" }}>
+          <Link href="/" className="flex items-center gap-1 hover:text-[#7C3AED] transition-colors">
             <Home className="w-3.5 h-3.5" />
             <span>الرئيسية</span>
           </Link>
-          <ChevronLeft className="w-3 h-3" />
-          <span className="font-semibold truncate max-w-xs" style={{ color: "#7C3AED" }}>
+          <ChevronLeft className="w-3 h-3" aria-hidden="true" />
+          <span className="font-semibold truncate max-w-xs" style={{ color: "#7C3AED" }} aria-current="page">
             {description || "ملف PDF"}
           </span>
         </nav>
@@ -117,71 +188,43 @@ const proxiedUrl = pdfFileUrl
         </div>
 
         {/* PDF Viewer */}
-        <div
-          className="rounded-3xl overflow-hidden mb-4"
-          style={{ background: "#fff", border: "1.5px solid #E8E2D8" }}
-        >
+        <div className="rounded-3xl overflow-hidden mb-4" style={{ background: "#fff", border: "1.5px solid #E8E2D8" }}>
           {/* Toolbar */}
-          <div
-            className="flex items-center justify-between px-5 py-3"
-            style={{ borderBottom: "1px solid #E8E2D8" }}
-          >
-            <span
-              className="flex items-center gap-1.5 text-xs font-bold font-['Tajawal']"
-              style={{ color: "#AAA" }}
-            >
+          <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: "1px solid #E8E2D8" }}>
+            <span className="flex items-center gap-1.5 text-xs font-bold font-['Tajawal']" style={{ color: "#AAA" }}>
               <FileText className="w-3.5 h-3.5" />
               PDF Viewer
             </span>
-
-            <a
-              href={proxiedUrl!}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 text-xs font-bold hover:text-[#6D28D9] transition-colors font-['Tajawal']"
-              style={{ color: "#7C3AED" }}
-            >
-              <ExternalLink className="w-3 h-3" />
-              فتح في تبويب جديد
-            </a>
+            {proxiedUrl && (
+              <a
+                href={proxiedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs font-bold hover:text-[#6D28D9] transition-colors font-['Tajawal']"
+                style={{ color: "#7C3AED" }}
+              >
+                <ExternalLink className="w-3 h-3" />
+                فتح في تبويب جديد
+              </a>
+            )}
           </div>
 
           {/* iframe */}
           <div className="relative w-full" style={{ height: "75vh" }}>
             {proxiedUrl ? (
-            <iframe
-    src={proxiedUrl}
-    className="w-full h-full border-0"
-    title={description || "PDF Viewer"}
-    allow="fullscreen"
-    // sandbox removed — proxy CSP already handles security
-  />
+              <iframe
+                src={proxiedUrl}
+                className="w-full h-full border-0"
+                title={description || "PDF Viewer"}
+                allow="fullscreen"
+              />
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-3">
-                <div
-                  className="w-14 h-14 rounded-2xl flex items-center justify-center"
-                  style={{ background: "#EDE9FE" }}
-                >
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: "#EDE9FE" }}>
                   <FileText className="w-7 h-7" style={{ color: "#7C3AED" }} />
                 </div>
-                <p className="font-bold text-[#1A1A1A] font-['Tajawal']">
-                  لا يمكن عرض الملف هنا
-                </p>
-                <p className="text-sm font-['Tajawal']" style={{ color: "#999" }}>
-                  جرب فتحه في تبويب جديد
-                </p>
-                {proxiedUrl && (
-                  <a
-                    href={proxiedUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white font-['Tajawal']"
-                    style={{ background: "#7C3AED" }}
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    فتح الملف
-                  </a>
-                )}
+                <p className="font-bold text-[#1A1A1A] font-['Tajawal']">لا يمكن عرض الملف هنا</p>
+                <p className="text-sm font-['Tajawal']" style={{ color: "#999" }}>جرب فتحه في تبويب جديد</p>
               </div>
             )}
           </div>
@@ -193,14 +236,9 @@ const proxiedUrl = pdfFileUrl
           style={{ background: "#fff", border: "1.5px solid #E8E2D8" }}
         >
           <div>
-            <p className="font-black text-[#1A1A1A] text-sm font-['Tajawal']">
-              {description || "ملف PDF"}
-            </p>
-            <p className="text-xs font-['Tajawal'] mt-0.5" style={{ color: "#AAA" }}>
-              مجاني — بدون تسجيل
-            </p>
+            <p className="font-black text-[#1A1A1A] text-sm font-['Tajawal']">{description || "ملف PDF"}</p>
+            <p className="text-xs font-['Tajawal'] mt-0.5" style={{ color: "#AAA" }}>مجاني — بدون تسجيل</p>
           </div>
-
           <div className="flex items-center gap-3">
             {proxiedUrl && (
               <a
@@ -215,50 +253,34 @@ const proxiedUrl = pdfFileUrl
               </a>
             )}
             {urlDownload && (
-              <DownloadButton
-                url={urlDownload}
-                fileName={`tawfik-${pdfurl}.pdf`}
-              />
+              <DownloadButton url={urlDownload} fileName={`تawfik-${safeTitle}.pdf`} />
             )}
           </div>
         </div>
 
         {/* Related Exams */}
         {examsList.length > 0 && (
-          <div className="mb-8">
+          <section aria-label="اختبارات ومواضيع ذات صلة" className="mb-8">
             <p className="text-xs font-bold tracking-widest uppercase mb-3" style={{ color: "#7C3AED" }}>
               اختبارات ومواضيع ذات صلة
             </p>
             <div className="space-y-2">
               {examsList.map((exam, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 p-3.5 rounded-2xl"
-                  style={{ background: "#fff", border: "1.5px solid #E8E2D8" }}
-                >
-                  <div
-                    className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: "#FEF3C7" }}
-                  >
+                <div key={i} className="flex items-center gap-3 p-3.5 rounded-2xl" style={{ background: "#fff", border: "1.5px solid #E8E2D8" }}>
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#FEF3C7" }}>
                     <FileText className="w-4 h-4" style={{ color: "#92400E" }} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-[#1A1A1A] font-['Tajawal'] leading-relaxed">
-                      {exam.text}
-                    </p>
+                    <p className="text-xs font-bold text-[#1A1A1A] font-['Tajawal'] leading-relaxed">{exam.text}</p>
                     <div className="flex items-center gap-3 mt-0.5">
-                      <span className="text-[10px] font-['Tajawal']" style={{ color: "#999" }}>
-                        {exam.year}
-                      </span>
+                      <span className="text-[10px] font-['Tajawal']" style={{ color: "#999" }}>{exam.year}</span>
                       {exam.hasSolution ? (
                         <span className="text-[10px] font-bold font-['Tajawal'] flex items-center gap-0.5" style={{ color: "#065F46" }}>
-                          <CheckCircle2 className="w-2.5 h-2.5" />
-                          مع الحل
+                          <CheckCircle2 className="w-2.5 h-2.5" />مع الحل
                         </span>
                       ) : (
                         <span className="text-[10px] font-bold font-['Tajawal'] flex items-center gap-0.5" style={{ color: "#9D174D" }}>
-                          <XCircle className="w-2.5 h-2.5" />
-                          بدون حل
+                          <XCircle className="w-2.5 h-2.5" />بدون حل
                         </span>
                       )}
                     </div>
@@ -274,12 +296,12 @@ const proxiedUrl = pdfFileUrl
                 </div>
               ))}
             </div>
-          </div>
+          </section>
         )}
 
         {/* Related Items */}
         {realtedItems.length > 0 && (
-          <div className="mb-8">
+          <section aria-label="مواد ذات صلة" className="mb-8">
             <p className="text-xs font-bold tracking-widest uppercase mb-3" style={{ color: "#7C3AED" }}>
               مواد ذات صلة
             </p>
@@ -291,43 +313,29 @@ const proxiedUrl = pdfFileUrl
                   className="group flex items-center gap-3 p-3.5 rounded-2xl transition-all hover:-translate-y-0.5 hover:shadow-md"
                   style={{ background: "#fff", border: "1.5px solid #E8E2D8" }}
                 >
-                  <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden shrink-0"
-                    style={{ background: "#F7F3EC" }}
-                  >
-                    <img
-                      src={item.img}
-                      alt={item.text}
-                      className="w-8 h-8 object-contain"
-                      loading="lazy"
-                    />
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden shrink-0" style={{ background: "#F7F3EC" }}>
+                    <img src={item.img} alt={item.text} className="w-8 h-8 object-contain" loading="lazy" />
                   </div>
                   <p className="flex-1 text-xs font-bold text-[#1A1A1A] font-['Tajawal'] leading-relaxed group-hover:text-[#7C3AED] transition-colors min-w-0">
                     {item.text}
                   </p>
-                  <ChevronLeft
-                    className="w-4 h-4 shrink-0 group-hover:text-[#7C3AED] transition-colors"
-                    style={{ color: "#CCC" }}
-                  />
+                  <ChevronLeft className="w-4 h-4 shrink-0 group-hover:text-[#7C3AED] transition-colors" style={{ color: "#CCC" }} />
                 </Link>
               ))}
             </div>
-          </div>
+          </section>
         )}
 
         {/* Footer note */}
-        <p className="text-center text-[11px] font-['Tajawal'] mt-4" style={{ color: "#CCC" }}>
-          مشكلة في العرض؟{" "}
-          <a
-            href={proxiedUrl!}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-bold hover:underline"
-            style={{ color: "#7C3AED" }}
-          >
-            افتح الملف في تبويب جديد
-          </a>
-        </p>
+        {proxiedUrl && (
+          <p className="text-center text-[11px] font-['Tajawal'] mt-4" style={{ color: "#CCC" }}>
+            مشكلة في العرض؟{" "}
+            <a href={proxiedUrl} target="_blank" rel="noopener noreferrer" className="font-bold hover:underline" style={{ color: "#7C3AED" }}>
+              افتح الملف في تبويب جديد
+            </a>
+          </p>
+        )}
+
       </div>
     </main>
   );

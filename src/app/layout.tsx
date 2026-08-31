@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { Tajawal } from "next/font/google";
 import "./globals.css";
+import Script from "next/script";
 
 const tajawal = Tajawal({
   subsets: ["arabic"],
@@ -152,12 +153,29 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ar" dir="rtl" className={`${tajawal.variable} scroll-smooth`}>
       <head>
         <meta name="google-site-verification" content="2KliwNjr6lQGipGCkHBXYyhrp8vGLMAspStZ_Dh-Huo" />
+        <meta name="monetag" content="5f89dc027d0520bd5b5f7038e4679a41"></meta>
+     
+        <meta name="google-adsense-account" content="ca-pub-1225494304742605"></meta>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }} />
       </head>
       <body className={`${tajawal.className} antialiased bg-[#F7F3EC]`}>
         <Analytics />
         {children}
+
+        <script defer src="https://cloud.umami.is/script.js" data-website-id="871de368-3f9b-4f14-b56c-0fbbc8ec30c8"></script>
+        {/* <Script id="ad-script">
+          {`
+            (function(s){
+              s.dataset.zone='11684280';
+              s.src='https://al5sm.com/tag.min.js'
+            })([document.documentElement, document.body]
+              .filter(Boolean)
+              .pop()
+              .appendChild(document.createElement('script')))
+          `}
+        </Script> */}
+        {/* <script src="https://quge5.com/88/tag.min.js" data-zone="274508" async data-cfasync="false"></script> */}
       </body>
     </html>
   );
